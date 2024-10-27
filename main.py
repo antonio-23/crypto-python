@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from fun.encryption_functions import vigenere_cipher, columnar_transposition
-
+from encryptions.vigener import vigenere_cipher
+from encryptions.transposition import columnar_transposition
 
 class EncryptionApp:
     def __init__(self, master):
