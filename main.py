@@ -1,118 +1,356 @@
+import os
 import tkinter as tk
-from tkinter import filedialog, messagebox
-from encryptions.vigener import vigenere_cipher
+from tkinter import ttk, filedialog, messagebox
+
+from encryptions.aes import aes_encrypt, aes_decrypt, aes_encrypt_file, aes_decrypt_file
+from encryptions.des import des_encrypt, des_decrypt, des_encrypt_file, des_decrypt_file
 from encryptions.transposition import columnar_transposition
+from encryptions.vigener import vigenere_cipher
+
 
 class EncryptionApp:
     def __init__(self, master):
         self.master = master
-        master.title("Encryption/Decryption Application")
+        master.title("Advanced Encryption/Decryption Application")
 
-        self.master.geometry("500x400")
+        # Set window size and make it non-resizable
+        self.master.geometry("650x750")
+        self.master.resizable(False, False)
 
-        # Encryption method selection
-        self.method_label = tk.Label(master, text="Select encryption method:")
-        self.method_label.pack()
+        # Create main container with padding
+        self.main_frame = ttk.Frame(master, padding="20")
+        self.main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
-        self.method_var = tk.StringVar()
-        self.method_var.set("vigenere")
+        # Initialize output directory
+        self.output_dir = "encrypted_files"
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
 
-        self.vigenere_radio = tk.Radiobutton(master, text="Vigenere", variable=self.method_var, value="vigenere")
-        self.vigenere_radio.pack()
+        # Style configuration
+        self.configure_styles()
 
-        self.columnar_radio = tk.Radiobutton(master, text="Columnar", variable=self.method_var, value="columnar")
-        self.columnar_radio.pack()
+        # Create sections
+        self.create_encryption_method_section()
+        self.create_key_section()
+        self.create_input_section()
+        self.create_output_options_section()
+        self.create_action_section()
+        self.create_output_section()
+
+    def configure_styles(self):
+        style = ttk.Style()
+        style.configure('TLabel', font=('Helvetica', 10))
+        style.configure('TButton', font=('Helvetica', 10))
+        style.configure('Header.TLabel', font=('Helvetica', 12, 'bold'))
+
+    def create_encryption_method_section(self):
+        # Encryption Method Section
+        method_frame = ttk.LabelFrame(self.main_frame, text="Encryption Method", padding="10")
+        method_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+
+        self.method_var = tk.StringVar(value="vigenere")
+        methods = [
+            ("Vigenere Cipher", "vigenere"),
+            ("Columnar Transposition", "columnar"),
+            ("AES Encryption", "aes"),
+            ("DES Encryption", "des")
+        ]
+
+        for i, (text, value) in enumerate(methods):
+            ttk.Radiobutton(
+                method_frame,
+                text=text,
+                value=value,
+                variable=self.method_var,
+                command=self.update_key_requirements
+            ).grid(row=0, column=i, padx=10)
+
+    def create_key_section(self):
+        # Key Input Section
+        key_frame = ttk.LabelFrame(self.main_frame, text="Encryption Key", padding="10")
+        key_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+
+        self.key_label = ttk.Label(key_frame, text="Enter Key:")
+        self.key_label.grid(row=0, column=0, padx=5)
+
+        self.key_entry = ttk.Entry(key_frame, width=50)
+        self.key_entry.grid(row=0, column=1, padx=5)
+
+        self.key_info = ttk.Label(key_frame, text="")
+        self.key_info.grid(row=1, column=0, columnspan=2, pady=(5, 0))
+
+    def create_input_section(self):
+        # Input Section
+        input_frame = ttk.LabelFrame(self.main_frame, text="Input", padding="10")
+        input_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
         # Input method selection
-        self.input_label = tk.Label(master, text="Select input method:")
-        self.input_label.pack()
+        self.input_var = tk.StringVar(value="text")
+        ttk.Radiobutton(
+            input_frame,
+            text="Direct Text Input",
+            value="text",
+            variable=self.input_var,
+            command=self.toggle_input_method
+        ).grid(row=0, column=0, padx=5)
 
-        self.input_var = tk.StringVar()
-        self.input_var.set("type")
-
-        self.type_radio = tk.Radiobutton(master, text="Type text", variable=self.input_var, value="type",
-                                         command=self.show_text_input)
-        self.type_radio.pack()
-
-        self.file_radio = tk.Radiobutton(master, text="Load file", variable=self.input_var, value="file",
-                                         command=self.hide_text_input)
-        self.file_radio.pack()
+        ttk.Radiobutton(
+            input_frame,
+            text="Load From File",
+            value="file",
+            variable=self.input_var,
+            command=self.toggle_input_method
+        ).grid(row=0, column=1, padx=5)
 
         # Text input
-        self.text_input = tk.Text(master, height=10, width=50)
-        self.text_input.pack()
+        self.text_input = tk.Text(input_frame, height=8, width=70)
+        self.text_input.grid(row=1, column=0, columnspan=2, pady=10)
 
-        # File input button
-        self.file_button = tk.Button(master, text="Choose File", command=self.load_file)
-        self.file_button.pack()
-        self.file_button.pack_forget()  # Hide initially
+        # File input
+        self.file_frame = ttk.Frame(input_frame)
+        self.file_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E))
 
-        # Key input
-        self.key_label = tk.Label(master, text="Enter encryption key:")
-        self.key_label.pack()
-        self.key_entry = tk.Entry(master)
-        self.key_entry.pack()
+        self.file_path_var = tk.StringVar()
+        self.file_path_entry = ttk.Entry(self.file_frame, textvariable=self.file_path_var, state='readonly', width=50)
+        self.file_path_entry.grid(row=0, column=0, padx=5)
 
-        # Process button
-        self.process_button = tk.Button(master, text="Encrypt and Decrypt", command=self.process)
-        self.process_button.pack()
+        self.browse_button = ttk.Button(self.file_frame, text="Browse", command=self.load_file)
+        self.browse_button.grid(row=0, column=1, padx=5)
 
-    def show_text_input(self):
-        self.text_input.pack()
-        self.file_button.pack_forget()
+        self.file_frame.grid_remove()
 
-    def hide_text_input(self):
-        self.text_input.pack_forget()
-        self.file_button.pack()
+    def create_output_options_section(self):
+        # Output Options Section
+        output_options_frame = ttk.LabelFrame(self.main_frame, text="Output Options", padding="10")
+        output_options_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+
+        # File naming options
+        naming_frame = ttk.Frame(output_options_frame)
+        naming_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=5)
+
+        ttk.Label(naming_frame, text="Output Directory:").grid(row=0, column=0, padx=5)
+        self.output_dir_var = tk.StringVar(value=self.output_dir)
+        self.output_dir_entry = ttk.Entry(naming_frame, textvariable=self.output_dir_var, width=40)
+        self.output_dir_entry.grid(row=0, column=1, padx=5)
+        ttk.Button(naming_frame, text="Browse", command=self.choose_output_dir).grid(row=0, column=2, padx=5)
+
+        # File format options
+        format_frame = ttk.Frame(output_options_frame)
+        format_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=5)
+
+        self.timestamp_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            format_frame,
+            text="Add timestamp to filename",
+            variable=self.timestamp_var
+        ).grid(row=0, column=0, padx=5)
+
+        self.keep_original_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            format_frame,
+            text="Keep original file extension",
+            variable=self.keep_original_var
+        ).grid(row=0, column=1, padx=5)
+
+    def create_action_section(self):
+        # Action Buttons Section
+        action_frame = ttk.Frame(self.main_frame)
+        action_frame.grid(row=4, column=0, columnspan=2, pady=10)
+
+        ttk.Button(
+            action_frame,
+            text="Encrypt",
+            command=lambda: self.process(encrypt=True)
+        ).grid(row=0, column=0, padx=10)
+
+        ttk.Button(
+            action_frame,
+            text="Decrypt",
+            command=lambda: self.process(encrypt=False)
+        ).grid(row=0, column=1, padx=10)
+
+    def create_output_section(self):
+        # Output Section
+        output_frame = ttk.LabelFrame(self.main_frame, text="Output", padding="10")
+        output_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E))
+
+        self.output_text = tk.Text(output_frame, height=8, width=70, state='disabled')
+        self.output_text.grid(row=0, column=0, pady=5)
+
+    def choose_output_dir(self):
+        directory = filedialog.askdirectory(initialdir=self.output_dir)
+        if directory:
+            self.output_dir = directory
+            self.output_dir_var.set(directory)
+
+    def generate_output_filename(self, original_filename, operation):
+        # Get base filename
+        base_name = os.path.splitext(os.path.basename(original_filename))[0] if original_filename else "output"
+        extension = os.path.splitext(original_filename)[1] if self.keep_original_var.get() else ".txt"
+
+        # Add timestamp if selected
+        if self.timestamp_var.get():
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"{base_name}_{operation}_{timestamp}{extension}"
+        else:
+            filename = f"{base_name}_{operation}{extension}"
+
+        return os.path.join(self.output_dir, filename)
+
+    def save_output(self, content, operation):
+        try:
+            # Generate filename
+            input_filename = self.file_path_var.get() if self.input_var.get() == "file" else None
+            output_file = self.generate_output_filename(input_filename, operation)
+
+            # Ensure directory exists
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+
+            # Save content
+            with open(output_file, 'w', encoding='utf-8') as file:
+                file.write(content)
+
+            return output_file
+        except Exception as e:
+            raise ValueError(f"Error saving file: {str(e)}")
+
+    def process(self, encrypt=True):
+        try:
+            method = self.method_var.get()
+            key = self.key_entry.get()
+            if not key:
+                raise ValueError("Please enter an encryption key.")
+
+            if self.input_var.get() == "file":
+                input_file_path = self.file_path_var.get()
+                if not input_file_path:
+                    raise ValueError("Please select a file to process.")
+                output_file_path = self.generate_output_filename(input_file_path,
+                                                                 "encrypted" if encrypt else "decrypted")
+
+                if method == "aes":
+                    if len(key) not in [16, 24, 32]:
+                        raise ValueError("AES key must be 16, 24, or 32 characters long.")
+                    if encrypt:
+                        aes_encrypt_file(input_file_path, output_file_path, key)
+                    else:
+                        aes_decrypt_file(input_file_path, output_file_path, key)
+                elif method == "des":
+                    if len(key) != 8:
+                        raise ValueError("DES key must be exactly 8 characters long.")
+                    if encrypt:
+                        des_encrypt_file(input_file_path, output_file_path, key)
+                    else:
+                        des_decrypt_file(input_file_path, output_file_path, key)
+
+                messagebox.showinfo("Success",
+                                    f"Operation completed successfully!\nOutput saved to: {output_file_path}")
+
+            else:
+                text = self.text_input.get('1.0', tk.END).strip()
+                if not text:
+                    raise ValueError("Please enter or load some text to process.")
+
+                if method == "vigenere":
+                    result = vigenere_cipher(text, key, encrypt)
+                elif method == "columnar":
+                    result = columnar_transposition(text, key, encrypt)
+                elif method == "aes":
+                    if len(key) not in [16, 24, 32]:
+                        raise ValueError("AES key must be 16, 24, or 32 characters long.")
+                    result = aes_encrypt(text, key) if encrypt else aes_decrypt(text, key)
+                elif method == "des":
+                    if len(key) != 8:
+                        raise ValueError("DES key must be exactly 8 characters long.")
+                    result = des_encrypt(text, key) if encrypt else des_decrypt(text, key)
+
+                self.update_output(result)
+
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
+
+    def update_output(self, text):
+        self.output_text.config(state='normal')
+        self.output_text.delete('1.0', tk.END)
+        self.output_text.insert('1.0', text)
+        self.output_text.config(state='disabled')
+
+    def update_key_requirements(self):
+        method = self.method_var.get()
+        if method == "aes":
+            self.key_info.config(text="Key must be 16, 24, or 32 characters long for AES-128, AES-192, or AES-256")
+        elif method == "des":
+            self.key_info.config(text="Key must be exactly 8 characters long")
+        else:
+            self.key_info.config(text="")
+
+    def toggle_input_method(self):
+        if self.input_var.get() == "file":
+            self.text_input.grid_remove()
+            self.file_frame.grid()
+        else:
+            self.text_input.grid()
+            self.file_frame.grid_remove()
 
     def load_file(self):
-        file_path = filedialog.askopenfilename(filetypes=[("Text files", "*.txt")])
+        file_path = filedialog.askopenfilename(
+            filetypes=[("All files", "*.*")]
+        )
         if file_path:
-            with open(file_path, 'r') as file:
-                self.text_input.delete('1.0', tk.END)
-                self.text_input.insert(tk.END, file.read())
+            self.file_path_var.set(file_path)
+            with open(file_path, 'rb') as file:
+                self.file_data = file.read()
 
-    def process(self):
-        method = self.method_var.get()
-        input_method = self.input_var.get()
-        key = self.key_entry.get().upper()
+    def save_output(self, data, operation):
+        output_file_path = filedialog.asksaveasfilename(
+            defaultextension=".enc",
+            filetypes=[("Encrypted files", "*.enc"), ("All files", "*.*")]
+        )
+        if output_file_path:
+            with open(output_file_path, 'wb') as file:
+                file.write(data)
+        return output_file_path
 
-        if not key:
-            messagebox.showerror("Error", "Please enter an encryption key.")
-            return
+    def encrypt_decrypt(self, encrypt=True):
+        try:
+            method = self.method_var.get()
+            key = self.key_var.get()
+            if self.input_var.get() == "file":
+                data = self.file_data
+            else:
+                data = self.text_input.get('1.0', tk.END).encode('utf-8')
 
-        if input_method == "type":
-            text = self.text_input.get('1.0', tk.END).strip()
-        else:
-            text = self.text_input.get('1.0', tk.END).strip()
+            if method == "aes":
+                if len(key) not in [16, 24, 32]:
+                    raise ValueError("AES key must be 16, 24, or 32 characters long.")
+                result = aes_encrypt(data, key) if encrypt else aes_decrypt(data, key)
+            elif method == "des":
+                if len(key) != 8:
+                    raise ValueError("DES key must be exactly 8 characters long.")
+                result = des_encrypt(data, key) if encrypt else des_decrypt(data, key)
 
-        if not text:
-            messagebox.showerror("Error", "Please enter or load some text.")
-            return
+            # Update output display
+            self.update_output(result.decode('utf-8') if not self.input_var.get() == "file" else "Binary data")
 
-        # Encrypt
-        if method == "vigenere":
-            encrypted = vigenere_cipher(text, key, encrypt=True)
-        else:
-            encrypted = columnar_transposition(text, key, encrypt=True)
+            # Save to file
+            operation = "encrypted" if encrypt else "decrypted"
+            output_file = self.save_output(result, operation)
 
-        # Write encrypted to file
-        with open("ENCRYPTED", 'w') as file:
-            file.write(encrypted)
+            messagebox.showinfo(
+                "Success",
+                f"Operation completed successfully!\nOutput saved to: {output_file}"
+            )
 
-        # Decrypt
-        if method == "vigenere":
-            decrypted = vigenere_cipher(encrypted, key, encrypt=False)
-        else:
-            decrypted = columnar_transposition(encrypted, key, encrypt=False)
-
-        # Write decrypted to file
-        with open("DECRYPTED", 'w') as file:
-            file.write(decrypted)
-
-        messagebox.showinfo("Success", "Encryption and decryption completed. Check ENCRYPTED and DECRYPTED files.")
+        except Exception as e:
+            messagebox.showerror("Error", str(e))
 
 
-root = tk.Tk()
-app = EncryptionApp(root)
-root.mainloop()
+def main():
+    root = tk.Tk()
+    app = EncryptionApp(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    main()
