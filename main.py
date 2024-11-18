@@ -4,6 +4,7 @@ from tkinter import ttk, filedialog, messagebox
 
 from encryptions.aes import aes_encrypt, aes_decrypt, aes_encrypt_file, aes_decrypt_file
 from encryptions.des import des_encrypt, des_decrypt, des_encrypt_file, des_decrypt_file
+from encryptions.rsa import rsa_szyfrowanie, rsa_szyfrowanie_plik, rsa_deszyfrowanie_plik, rsa_deszyfrowanie
 from encryptions.transposition import columnar_transposition
 from encryptions.vigener import vigenere_cipher
 
@@ -14,7 +15,7 @@ class EncryptionApp:
         master.title("Advanced Encryption/Decryption Application")
 
         # Set window size and make it non-resizable
-        self.master.geometry("650x750")
+        self.master.geometry("850x750")
         self.master.resizable(False, False)
 
         # Create main container with padding
@@ -53,7 +54,8 @@ class EncryptionApp:
             ("Vigenere Cipher", "vigenere"),
             ("Columnar Transposition", "columnar"),
             ("AES Encryption", "aes"),
-            ("DES Encryption", "des")
+            ("DES Encryption", "des"),
+            ("RSA Encryption", "rsa")
         ]
 
         for i, (text, value) in enumerate(methods):
@@ -62,22 +64,53 @@ class EncryptionApp:
                 text=text,
                 value=value,
                 variable=self.method_var,
-                command=self.update_key_requirements
+                command=self.on_method_change  # Zmienione na self.on_method_change
             ).grid(row=0, column=i, padx=10)
 
     def create_key_section(self):
+        # Usuń istniejący key_frame (jeśli istnieje)
+        if hasattr(self, 'key_frame'):
+            self.key_frame.destroy()
+
         # Key Input Section
-        key_frame = ttk.LabelFrame(self.main_frame, text="Encryption Key", padding="10")
-        key_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.key_frame = ttk.LabelFrame(self.main_frame, text="Klucze szyfrowania", padding="10")
+        self.key_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
-        self.key_label = ttk.Label(key_frame, text="Enter Key:")
-        self.key_label.grid(row=0, column=0, padx=5)
+        # Public Key
+        ttk.Label(self.key_frame, text="Klucz publiczny:").grid(row=0, column=0, padx=5, pady=(5, 0), sticky=tk.W)
+        self.public_key_entry = tk.Text(self.key_frame, height=1, width=50, wrap="none")
+        self.public_key_entry.grid(row=0, column=1, padx=5, pady=(5, 0))
 
-        self.key_entry = ttk.Entry(key_frame, width=50)
-        self.key_entry.grid(row=0, column=1, padx=5)
 
-        self.key_info = ttk.Label(key_frame, text="")
-        self.key_info.grid(row=1, column=0, columnspan=2, pady=(5, 0))
+        # Sprawdź wybraną metodę szyfrowania
+        method = self.method_var.get()
+        print(f"Selected method: {method}")
+
+        if method.lower() == 'rsa':
+            # Private Key
+            ttk.Label(self.key_frame, text="Klucz prywatny:").grid(row=2, column=0, padx=5, pady=(5, 0), sticky=tk.W)
+            self.private_key_entry = tk.Text(self.key_frame, height=1, width=50, wrap="none")
+            self.private_key_entry.grid(row=2, column=1, padx=5, pady=(5, 0))
+
+        # Informacje o kluczach
+        self.key_info = ttk.Label(self.key_frame, text="")
+        self.key_info.grid(row=4, column=0, columnspan=2, pady=(10, 0))
+
+    def on_method_change(self):
+        """Handle method change: refresh key section and update key requirements."""
+        self.create_key_section()  # Odśwież sekcję klucza
+        self.update_key_requirements()  # Zaktualizuj wskazówki dotyczące klucza
+
+
+    def setup_method_selection(self):
+        self.method_var = tk.StringVar(value='default')  # Domyślna metoda
+        rsa_radio = ttk.Radiobutton(self.main_frame, text="RSA", variable=self.method_var, value='rsa',
+                                    command=self.on_method_change)
+        aes_radio = ttk.Radiobutton(self.main_frame, text="AES", variable=self.method_var, value='aes',
+                                    command=self.on_method_change)
+
+        rsa_radio.grid(row=0, column=0, padx=10, pady=10)
+        aes_radio.grid(row=0, column=1, padx=10, pady=10)
 
     def create_input_section(self):
         # Input Section
@@ -121,6 +154,10 @@ class EncryptionApp:
 
     def create_output_options_section(self):
         # Output Options Section
+        method = self.method_var.get()
+        if method == 'rsa':
+            return
+
         output_options_frame = ttk.LabelFrame(self.main_frame, text="Output Options", padding="10")
         output_options_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
@@ -218,7 +255,10 @@ class EncryptionApp:
     def process(self, encrypt=True):
         try:
             method = self.method_var.get()
-            key = self.key_entry.get()
+            # key = self.key_entry.get()
+            key = self.public_key_entry.get("1.0", tk.END).strip()
+            private_key = self.private_key_entry.get("1.0", tk.END).strip()
+            print(key)
             if not key:
                 raise ValueError("Please enter an encryption key.")
 
@@ -243,6 +283,11 @@ class EncryptionApp:
                         des_encrypt_file(input_file_path, output_file_path, key)
                     else:
                         des_decrypt_file(input_file_path, output_file_path, key)
+                elif method == "rsa":
+                    if encrypt:
+                        rsa_szyfrowanie_plik(input_file_path,output_file_path, key)
+                    else:
+                        rsa_deszyfrowanie_plik(input_file_path, output_file_path, private_key)
 
                 messagebox.showinfo("Success",
                                     f"Operation completed successfully!\nOutput saved to: {output_file_path}")
@@ -264,6 +309,11 @@ class EncryptionApp:
                     if len(key) != 8:
                         raise ValueError("DES key must be exactly 8 characters long.")
                     result = des_encrypt(text, key) if encrypt else des_decrypt(text, key)
+                elif method == "rsa":
+                    if encrypt:
+                        result = rsa_szyfrowanie(text, key)
+                    else:
+                        result = rsa_deszyfrowanie(text, private_key)
 
                 self.update_output(result)
 
