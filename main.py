@@ -9,6 +9,7 @@ from encryptions.rsa import rsa_szyfrowanie, rsa_szyfrowanie_plik, rsa_deszyfrow
 from encryptions.transposition import columnar_transposition
 from encryptions.vigener import vigenere_cipher
 from encryptions.dh import *
+import time
 
 
 class EncryptionApp:
@@ -249,6 +250,8 @@ class EncryptionApp:
                 if not private_key:
                     raise ValueError("Proszę wprowadzić klucz prywatny.")
 
+            start_time = time.time()  # Start timing
+
             if self.input_var.get() == "file":
                 input_file_path = self.file_path_var.get()
                 if not input_file_path:
@@ -303,6 +306,10 @@ class EncryptionApp:
                         result = rsa_deszyfrowanie(text, private_key)
 
                 self.update_output(result)
+
+            end_time = time.time()  # End timing
+            elapsed_time = end_time - start_time
+            print(f"Czas {('szyfrowania' if encrypt else 'deszyfrowania')}: {elapsed_time:.4f} sekund")
 
         except Exception as e:
             messagebox.showerror("Error", str(e))
