@@ -76,7 +76,7 @@ def aes_encrypt_file(input_file_path, output_file_path, key):
     try:
         key_bytes = key.encode('utf-8')
         if len(key_bytes) not in [16, 24, 32]:
-            raise ValueError("AES key must be 16, 24, or 32 bytes long")
+            raise ValueError("AES musi mieć klucz 16, 24 lub 32 znaki.")
 
         with open(input_file_path, 'rb') as f:
             file_data = f.read()
@@ -96,7 +96,7 @@ def aes_decrypt_file(input_file_path, output_file_path, key):
     try:
         key_bytes = key.encode('utf-8')
         if len(key_bytes) not in [16, 24, 32]:
-            raise ValueError("AES key must be 16, 24, or 32 bytes long")
+            raise ValueError("AES musi mieć klucz 16, 24 lub 32 znaki.")
 
         with open(input_file_path, 'rb') as f:
             combined_data = f.read()

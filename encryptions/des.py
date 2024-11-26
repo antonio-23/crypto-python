@@ -22,7 +22,7 @@ def des_encrypt(text, key):
 
         # Validate key length
         if len(key_bytes) != 8:
-            raise ValueError("DES key must be exactly 8 bytes long")
+            raise ValueError("DES musi mieć klucz 8 znaków.")
 
         # Create cipher object and generate random IV
         cipher = DES.new(key_bytes, DES.MODE_CBC)
@@ -61,7 +61,7 @@ def des_decrypt(encrypted_text, key):
 
         # Validate key length
         if len(key_bytes) != 8:
-            raise ValueError("DES key must be exactly 8 bytes long")
+            raise ValueError("DES musi mieć klucz 8 znaków.")
 
         # Extract IV and encrypted content
         iv = encrypted_bytes[:DES.block_size]
@@ -83,7 +83,7 @@ def des_encrypt_file(input_file_path, output_file_path, key):
     try:
         key_bytes = key.encode('utf-8')
         if len(key_bytes) != 8:
-            raise ValueError("DES key must be exactly 8 bytes long")
+            raise ValueError("DES musi mieć klucz 8 znaków.")
 
         with open(input_file_path, 'rb') as f:
             file_data = f.read()
@@ -103,7 +103,7 @@ def des_decrypt_file(input_file_path, output_file_path, key):
     try:
         key_bytes = key.encode('utf-8')
         if len(key_bytes) != 8:
-            raise ValueError("DES key must be exactly 8 bytes long")
+            raise ValueError("DES musi mieć klucz 8 znaków.")
 
         with open(input_file_path, 'rb') as f:
             combined_data = f.read()

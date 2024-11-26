@@ -29,8 +29,8 @@ class EncryptionApp:
         self.other_frame = ttk.Frame(self.notebook)
 
         # Add frames to notebook
-        self.notebook.add(self.encryption_frame, text='Encryption/Decryption')
-        self.notebook.add(self.other_frame, text='Other Functionalities')
+        self.notebook.add(self.encryption_frame, text='Szyfrowanie/Deszyfrowanie')
+        self.notebook.add(self.other_frame, text='Diffie–Hellman')
 
         # Initialize output directory
         self.output_dir = "encrypted_files"
@@ -61,16 +61,16 @@ class EncryptionApp:
 
     def create_encryption_method_section(self):
         # Encryption Method Section
-        method_frame = ttk.LabelFrame(self.encryption_frame, text="Encryption Method", padding="10")
+        method_frame = ttk.LabelFrame(self.encryption_frame, text="Metody szyfrowania", padding="10")
         method_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
         self.method_var = tk.StringVar(value="vigenere")
         methods = [
-            ("Vigenere Cipher", "vigenere"),
-            ("Columnar Transposition", "columnar"),
-            ("AES Encryption", "aes"),
-            ("DES Encryption", "des"),
-            ("RSA Encryption", "rsa")
+            ("Vigenere", "vigenere"),
+            ("Transpozycyjny kolumnowy", "columnar"),
+            ("AES", "aes"),
+            ("DES", "des"),
+            ("RSA", "rsa")
         ]
 
         for i, (text, value) in enumerate(methods):
@@ -107,13 +107,13 @@ class EncryptionApp:
         self.update_key_requirements()
 
     def create_input_section(self):
-        input_frame = ttk.LabelFrame(self.encryption_frame, text="Input", padding="10")
+        input_frame = ttk.LabelFrame(self.encryption_frame, text="Wprowadź", padding="10")
         input_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
         self.input_var = tk.StringVar(value="text")
         ttk.Radiobutton(
             input_frame,
-            text="Direct Text Input",
+            text="Tekst",
             value="text",
             variable=self.input_var,
             command=self.toggle_input_method
@@ -121,7 +121,7 @@ class EncryptionApp:
 
         ttk.Radiobutton(
             input_frame,
-            text="Load From File",
+            text="Plik",
             value="file",
             variable=self.input_var,
             command=self.toggle_input_method
@@ -137,7 +137,7 @@ class EncryptionApp:
         self.file_path_entry = ttk.Entry(self.file_frame, textvariable=self.file_path_var, state='readonly', width=50)
         self.file_path_entry.grid(row=0, column=0, padx=5)
 
-        self.browse_button = ttk.Button(self.file_frame, text="Browse", command=self.load_file)
+        self.browse_button = ttk.Button(self.file_frame, text="Przeglądaj", command=self.load_file)
         self.browse_button.grid(row=0, column=1, padx=5)
 
         self.file_frame.grid_remove()
@@ -147,17 +147,17 @@ class EncryptionApp:
         if method == 'rsa':
             return
 
-        output_options_frame = ttk.LabelFrame(self.encryption_frame, text="Output Options", padding="10")
+        output_options_frame = ttk.LabelFrame(self.encryption_frame, text="Wynik", padding="10")
         output_options_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
 
         naming_frame = ttk.Frame(output_options_frame)
-        naming_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=5)
+        naming_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=5)
 
-        ttk.Label(naming_frame, text="Output Directory:").grid(row=0, column=0, padx=5)
+        ttk.Label(naming_frame, text="Katalog wyjściowy:").grid(row=0, column=0, padx=5)
         self.output_dir_var = tk.StringVar(value=self.output_dir)
         self.output_dir_entry = ttk.Entry(naming_frame, textvariable=self.output_dir_var, width=40)
         self.output_dir_entry.grid(row=0, column=1, padx=5)
-        ttk.Button(naming_frame, text="Browse", command=self.choose_output_dir).grid(row=0, column=2, padx=5)
+        ttk.Button(naming_frame, text="Przeglądaj", command=self.choose_output_dir).grid(row=0, column=2, padx=5)
 
         format_frame = ttk.Frame(output_options_frame)
         format_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=5)
@@ -165,14 +165,14 @@ class EncryptionApp:
         self.timestamp_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             format_frame,
-            text="Add timestamp to filename",
+            text="Dodaj znacznik czasu do nazwy pliku",
             variable=self.timestamp_var
         ).grid(row=0, column=0, padx=5)
 
         self.keep_original_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(
             format_frame,
-            text="Keep original file extension",
+            text="Zachowaj oryginalną nazwę pliku",
             variable=self.keep_original_var
         ).grid(row=0, column=1, padx=5)
 
@@ -182,18 +182,18 @@ class EncryptionApp:
 
         ttk.Button(
             action_frame,
-            text="Encrypt",
+            text="Szyfrowanie",
             command=lambda: self.process(encrypt=True)
         ).grid(row=0, column=0, padx=10)
 
         ttk.Button(
             action_frame,
-            text="Decrypt",
+            text="Deszyfrowanie",
             command=lambda: self.process(encrypt=False)
         ).grid(row=0, column=1, padx=10)
 
     def create_output_section(self):
-        output_frame = ttk.LabelFrame(self.encryption_frame, text="Output", padding="10")
+        output_frame = ttk.LabelFrame(self.encryption_frame, text="Wynik", padding="10")
         output_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E))
 
         self.output_text = tk.Text(output_frame, height=8, width=70, state='disabled')
@@ -240,27 +240,32 @@ class EncryptionApp:
         try:
             method = self.method_var.get()
             key = self.public_key_entry.get("1.0", tk.END).strip()
-            private_key = self.private_key_entry.get("1.0", tk.END).strip()
             if not key:
-                raise ValueError("Please enter an encryption key.")
+                raise ValueError("Proszę wprowadzić klucz publiczny.")
+
+            private_key = None
+            if method.lower() == 'rsa':
+                private_key = self.private_key_entry.get("1.0", tk.END).strip()
+                if not private_key:
+                    raise ValueError("Proszę wprowadzić klucz prywatny.")
 
             if self.input_var.get() == "file":
                 input_file_path = self.file_path_var.get()
                 if not input_file_path:
-                    raise ValueError("Please select a file to process.")
+                    raise ValueError("Proszę wybrać plik do przetworzenia.")
                 output_file_path = self.generate_output_filename(input_file_path,
                                                                  "encrypted" if encrypt else "decrypted")
 
                 if method == "aes":
                     if len(key) not in [16, 24, 32]:
-                        raise ValueError("AES key must be 16, 24, or 32 characters long.")
+                        raise ValueError("AES musi mieć klucz 16, 24 lub 32 znaki.")
                     if encrypt:
                         aes_encrypt_file(input_file_path, output_file_path, key)
                     else:
                         aes_decrypt_file(input_file_path, output_file_path, key)
                 elif method == "des":
                     if len(key) != 8:
-                        raise ValueError("DES key must be exactly 8 characters long.")
+                        raise ValueError("DES musi mieć klucz 8 znaków.")
                     if encrypt:
                         des_encrypt_file(input_file_path, output_file_path, key)
                     else:
@@ -271,13 +276,13 @@ class EncryptionApp:
                     else:
                         rsa_deszyfrowanie_plik(input_file_path, output_file_path, private_key)
 
-                messagebox.showinfo("Success",
-                                    f"Operation completed successfully!\nOutput saved to: {output_file_path}")
+                messagebox.showinfo("Sukces",
+                                    f"Operacja zakończona powodzeniem!\nWynik zapisany do: {output_file_path}")
 
             else:
                 text = self.text_input.get('1.0', tk.END).strip()
                 if not text:
-                    raise ValueError("Please enter or load some text to process.")
+                    raise ValueError("Proszę wprowadzić tekst do przetworzenia.")
 
                 if method == "vigenere":
                     result = vigenere_cipher(text, key, encrypt)
@@ -285,11 +290,11 @@ class EncryptionApp:
                     result = columnar_transposition(text, key, encrypt)
                 elif method == "aes":
                     if len(key) not in [16, 24, 32]:
-                        raise ValueError("AES key must be 16, 24, or 32 characters long.")
+                        raise ValueError("AES musi mieć klucz 16, 24 lub 32 znaki.")
                     result = aes_encrypt(text, key) if encrypt else aes_decrypt(text, key)
                 elif method == "des":
                     if len(key) != 8:
-                        raise ValueError("DES key must be exactly 8 characters long.")
+                        raise ValueError("DES musi mieć klucz 8 znaków.")
                     result = des_encrypt(text, key) if encrypt else des_decrypt(text, key)
                 elif method == "rsa":
                     if encrypt:
@@ -311,9 +316,9 @@ class EncryptionApp:
     def update_key_requirements(self):
         method = self.method_var.get()
         if method == "aes":
-            self.key_info.config(text="Key must be 16, 24, or 32 characters long for AES-128, AES-192, or AES-256")
+            self.key_info.config(text="Klucz musi mieć długość 16, 24 lub 32 znaków w przypadku AES-128, AES-192 lub AES-256")
         elif method == "des":
-            self.key_info.config(text="Key must be exactly 8 characters long")
+            self.key_info.config(text="Klucz musi mieć długość 8 znaków")
         else:
             self.key_info.config(text="")
 
