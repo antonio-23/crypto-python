@@ -10,6 +10,16 @@ from encryptions.transposition import columnar_transposition
 from encryptions.vigener import vigenere_cipher
 from encryptions.dh import *
 import time
+from cryptography import x509
+from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
+import datetime
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives import hashes
+
+
 
 
 class EncryptionApp:
@@ -18,8 +28,8 @@ class EncryptionApp:
         master.title("Advanced Encryption/Decryption Application")
 
         # Set window size and make it non-resizable
-        self.master.geometry("850x750")
-        self.master.resizable(False, False)
+        self.master.geometry("850x840")
+        self.master.resizable(True, True)
 
         # Create a notebook (tabbed interface)
         self.notebook = ttk.Notebook(master)
@@ -28,10 +38,12 @@ class EncryptionApp:
         # Create frames for each tab
         self.encryption_frame = ttk.Frame(self.notebook)
         self.other_frame = ttk.Frame(self.notebook)
+        self.digital_signature_frame = ttk.Frame(self.notebook)
 
         # Add frames to notebook
         self.notebook.add(self.encryption_frame, text='Szyfrowanie/Deszyfrowanie')
         self.notebook.add(self.other_frame, text='Diffie–Hellman')
+        self.notebook.add(self.digital_signature_frame, text='Podpis cyfrowy')
 
         # Initialize output directory
         self.output_dir = "encrypted_files"
@@ -51,6 +63,9 @@ class EncryptionApp:
 
         # Create other functionalities in the other frame
         self.create_other_functionalities()
+
+        # Create digital signature section
+        self.create_digital_signature_section()
 
 
 
@@ -462,6 +477,338 @@ class EncryptionApp:
         self.text2_left.delete('1.0', tk.END)
         self.text2_left.insert('1.0', decrypted_text)
         self.text2_left.config(state='disabled')
+
+    def create_digital_signature_section(self):
+
+        # Key Generation Section
+        key_gen_frame = ttk.LabelFrame(self.digital_signature_frame, text="Generowanie kluczy", padding="10")
+        key_gen_frame.pack(expand=1, fill='both', padx=10, pady=10)
+
+        ttk.Label(key_gen_frame, text="Folder:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.folder_var = tk.StringVar()
+        self.folder_entry = ttk.Entry(key_gen_frame, textvariable=self.folder_var, width=50)
+        self.folder_entry.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(key_gen_frame, text="Przeglądaj", command=self.choose_folder).grid(row=0, column=2, padx=5, pady=5)
+
+        ttk.Label(key_gen_frame, text="Imię:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        self.name_var = tk.StringVar()
+        self.name_entry = ttk.Entry(key_gen_frame, textvariable=self.name_var, width=50)
+        self.name_entry.grid(row=1, column=1, padx=5, pady=5)
+
+        ttk.Label(key_gen_frame, text="Nazwisko:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        self.surname_var = tk.StringVar()
+        self.surname_entry = ttk.Entry(key_gen_frame, textvariable=self.surname_var, width=50)
+        self.surname_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        ttk.Label(key_gen_frame, text="PESEL:").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
+        self.pesel_var = tk.StringVar()
+        self.pesel_entry = ttk.Entry(key_gen_frame, textvariable=self.pesel_var, width=50)
+        self.pesel_entry.grid(row=3, column=1, padx=5, pady=5)
+
+        ttk.Label(key_gen_frame, text="Adres:").grid(row=4, column=0, padx=5, pady=5, sticky=tk.W)
+        self.address_var = tk.StringVar()
+        self.address_entry = ttk.Entry(key_gen_frame, textvariable=self.address_var, width=50)
+        self.address_entry.grid(row=4, column=1, padx=5, pady=5)
+
+        ttk.Button(key_gen_frame, text="Generuj klucze", command=self.generate_x509_certificate).grid(row=5, column=0,
+                                                                                                      columnspan=3,
+                                                                                                      pady=10)
+
+        # Document Signing Section
+        signing_frame = ttk.LabelFrame(self.digital_signature_frame, text="Podpisywanie", padding="10")
+        signing_frame.pack(expand=1, fill='both', padx=10, pady=10)
+
+        ttk.Label(signing_frame, text="Dokument:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.document_path_var = tk.StringVar()
+        self.document_path_entry = ttk.Entry(signing_frame, textvariable=self.document_path_var, state='readonly',
+                                             width=50)
+        self.document_path_entry.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(signing_frame, text="Przeglądaj", command=self.load_document).grid(row=0, column=2, padx=5, pady=5)
+
+        ttk.Label(signing_frame, text="Klucz prywatny:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        self.private_key_entry = tk.Text(signing_frame, height=1, width=50, wrap="none")
+        self.private_key_entry.grid(row=1, column=1, padx=5, pady=5)
+        ttk.Button(signing_frame, text="Przeglądaj", command=self.load_private_key).grid(row=1, column=2, padx=5,
+                                                                                         pady=5)
+
+        ttk.Button(signing_frame, text="Podpisz dokument", command=self.sign_document).grid(row=2, column=0,
+                                                                                            columnspan=3, pady=10)
+
+        # Signature Verification Section
+        verification_frame = ttk.LabelFrame(self.digital_signature_frame, text="Weryfikacja", padding="10")
+        verification_frame.pack(expand=1, fill='both', padx=10, pady=10)
+
+        ttk.Label(verification_frame, text="Podpisany plik:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.signed_file_path_var = tk.StringVar()
+        self.signed_file_path_entry = ttk.Entry(verification_frame, textvariable=self.signed_file_path_var,
+                                                state='readonly', width=50)
+        self.signed_file_path_entry.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(verification_frame, text="Przeglądaj", command=self.load_signed_file).grid(row=0, column=2, padx=5,
+                                                                                              pady=5)
+
+        ttk.Label(verification_frame, text="Certyfikat:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
+        self.certificate_path_var = tk.StringVar()
+        self.certificate_path_entry = ttk.Entry(verification_frame, textvariable=self.certificate_path_var,
+                                                state='readonly', width=50)
+        self.certificate_path_entry.grid(row=1, column=1, padx=5, pady=5)
+        ttk.Button(verification_frame, text="Przeglądaj", command=self.load_certificate).grid(row=1, column=2, padx=5,
+                                                                                              pady=5)
+
+        ttk.Label(verification_frame, text="Łańcuch certyfikatu:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
+        self.certificate_chain_path_var = tk.StringVar()
+        self.certificate_chain_path_entry = ttk.Entry(verification_frame, textvariable=self.certificate_chain_path_var,
+                                                      state='readonly', width=50)
+        self.certificate_chain_path_entry.grid(row=2, column=1, padx=5, pady=5)
+        ttk.Button(verification_frame, text="Przeglądaj", command=self.load_certificate_chain).grid(row=2, column=2,
+                                                                                                    padx=5, pady=5)
+
+        ttk.Label(verification_frame, text="Plik:").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
+        self.file_path_var = tk.StringVar()
+        self.file_path_entry = ttk.Entry(verification_frame, textvariable=self.file_path_var, state='readonly',
+                                         width=50)
+        self.file_path_entry.grid(row=3, column=1, padx=5, pady=5)
+        ttk.Button(verification_frame, text="Przeglądaj", command=self.load_file).grid(row=3, column=2, padx=5, pady=5)
+
+        ttk.Button(verification_frame, text="Zweryfikuj podpis", command=self.verify_signature).grid(row=4, column=0,
+                                                                                                     columnspan=3,
+                                                                                                     pady=10)
+
+        ttk.Label(verification_frame, text="Wynik:").grid(row=5, column=0, padx=5, pady=5, sticky=tk.W)
+        self.verification_result = tk.Text(verification_frame, height=15, width=70, wrap="none", state='disabled')
+        self.verification_result.grid(row=5, column=1, padx=5, pady=5)
+
+    def load_certificate(self):
+        file_path = filedialog.askopenfilename(filetypes=[("PEM files", "*.pem"), ("All files", "*.*")])
+        if file_path:
+            self.certificate_path_var.set(file_path)
+
+    def load_certificate_chain(self):
+        file_path = filedialog.askopenfilename(filetypes=[("PEM files", "*.pem"), ("All files", "*.*")])
+        if file_path:
+            self.certificate_chain_path_var.set(file_path)
+
+    def choose_folder(self):
+        folder = filedialog.askdirectory()
+        if folder:
+            self.folder_var.set(folder)
+
+    def load_document(self):
+        file_path = filedialog.askopenfilename(filetypes=[("All files", "*.*")])
+        if file_path:
+            self.document_path_var.set(file_path)
+
+    def load_signed_file(self):
+        file_path = filedialog.askopenfilename(filetypes=[("All files", "*.*")])
+        if file_path:
+            self.signed_file_path_var.set(file_path)
+
+    def generate_keys(self):
+        # Implement key generation logic here
+        messagebox.showinfo("Sukces", "Klucze zostały wygenerowane.")
+
+    def sign_document(self):
+        # Implement document signing logic here
+        messagebox.showinfo("Sukces", "Dokument został podpisany.")
+
+    def verify_signature(self):
+        # Implement signature verification logic here
+        self.verification_result.config(state='normal')
+        self.verification_result.delete('1.0', tk.END)
+        self.verification_result.insert('1.0', "Podpis jest prawidłowy.")
+        self.verification_result.config(state='disabled')
+
+    def load_private_key(self):
+        file_path = filedialog.askopenfilename(filetypes=[("PEM files", "*.pem"), ("All files", "*.*")])
+        if file_path:
+            with open(file_path, 'r') as file:
+                private_key_pem = file.read()
+            self.private_key_entry.delete("1.0", tk.END)
+            self.private_key_entry.insert("1.0", private_key_pem)
+
+
+    def generate_x509_certificate(self):
+        try:
+            # Retrieve user input
+            name = self.name_var.get()
+            surname = self.surname_var.get()
+            pesel = self.pesel_var.get()
+            address = self.address_var.get()
+            folder = self.folder_var.get()
+
+            if not all([name, surname, pesel, address, folder]):
+                raise ValueError("Wszystkie pola muszą być wypełnione.")
+
+            # Generate private key
+            private_key = rsa.generate_private_key(
+                public_exponent=65537,
+                key_size=2048,
+            )
+
+            intermediate_private_key = serialization.load_pem_private_key(
+                self.intermediate_key.encode(),
+                password=None,
+                backend=default_backend()
+            )
+
+            intermediate_cert = x509.load_pem_x509_certificate(
+                self.intermediate_cert.encode(),
+                default_backend()
+            )
+
+            # Wczytanie certyfikatu Root CA
+            root_cert = x509.load_pem_x509_certificate(
+                self.root_cert.encode(),
+                default_backend()
+            )
+
+            # Create X.509 certificate
+            subject = issuer = x509.Name([
+                x509.NameAttribute(NameOID.COUNTRY_NAME, u"PL"),
+                x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, u""),
+                x509.NameAttribute(NameOID.LOCALITY_NAME, u""),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, u""),
+                x509.NameAttribute(NameOID.COMMON_NAME, f"{name} {surname}"),
+                x509.NameAttribute(NameOID.SERIAL_NUMBER, pesel),
+                x509.NameAttribute(NameOID.STREET_ADDRESS, address),
+            ])
+            certificate = x509.CertificateBuilder().subject_name(
+                subject
+            ).issuer_name(
+                issuer
+            ).public_key(
+                private_key.public_key()
+            ).serial_number(
+                x509.random_serial_number()
+            ).not_valid_before(
+                datetime.datetime.now(datetime.UTC)
+            ).not_valid_after(
+                # Certificate valid for 1 year
+                datetime.datetime.now(datetime.UTC) + datetime.timedelta(days=365)
+            ).add_extension(
+                x509.SubjectAlternativeName([x509.DNSName(u"localhost")]),
+                critical=False,
+            ).sign(private_key, hashes.SHA256())
+
+            # Save private key and certificate to files
+            private_key_path = os.path.join(folder, "private_key.pem")
+            certificate_path = os.path.join(folder, "certificate.pem")
+
+            with open(private_key_path, "wb") as f:
+                f.write(private_key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.TraditionalOpenSSL,
+                    encryption_algorithm=serialization.NoEncryption()
+                ))
+
+            with open(certificate_path, "wb") as f:
+                f.write(certificate.public_bytes(serialization.Encoding.PEM))
+
+            cert_chain_path = os.path.join(folder, "certificate_with_chain.pem")
+            with open(cert_chain_path, "wb") as chain_file:
+                # Zapisz certyfikat podmiotu
+                chain_file.write(certificate.public_bytes(serialization.Encoding.PEM))
+                # Zapisz certyfikat Intermediate CA
+                chain_file.write(intermediate_cert.public_bytes(serialization.Encoding.PEM))
+                # Zapisz certyfikat Root CA
+                chain_file.write(root_cert.public_bytes(serialization.Encoding.PEM))
+
+            messagebox.showinfo("Sukces", f"Klucz i certyfikat zostały wygenerowane i zapisane w {folder}")
+
+        except Exception as e:
+            messagebox.showerror("Błąd", str(e))
+
+    def sign_document(self):
+        try:
+            # Retrieve the document path and private key from the input fields
+            document_path = self.document_path_var.get()
+            private_key_pem = self.private_key_entry.get("1.0", tk.END).strip()
+
+            if not document_path or not private_key_pem:
+                raise ValueError("Proszę wybrać dokument i wprowadzić klucz prywatny.")
+
+            # Load the document
+            with open(document_path, 'rb') as f:
+                document_data = f.read()
+
+            # Load the private key
+            private_key = serialization.load_pem_private_key(
+                private_key_pem.encode('utf-8'),
+                password=None,
+            )
+
+            # Create the signature
+            signature = private_key.sign(
+                document_data,
+                padding.PKCS1v15(),
+                hashes.SHA256()
+            )
+
+            # Save the signature to a file
+            signature_path = os.path.join(os.path.dirname(document_path), "signature.sig")
+            with open(signature_path, 'wb') as f:
+                f.write(signature)
+
+            messagebox.showinfo("Sukces", f"Dokument został podpisany. Podpis zapisany w: {signature_path}")
+
+        except Exception as e:
+            messagebox.showerror("Błąd", str(e))
+
+    def verify_signature(self):
+        try:
+            # Retrieve the paths from the input fields
+            signed_file_path = self.signed_file_path_var.get()
+            certificate_path = self.certificate_path_var.get()
+            certificate_chain_path = self.certificate_chain_path_var.get()
+            original_file_path = self.file_path_var.get()
+
+            if not all([signed_file_path, certificate_path, original_file_path]):
+                raise ValueError("Proszę wybrać podpisany plik, certyfikat oraz oryginalny plik.")
+
+            # Load the signed file
+            with open(signed_file_path, 'rb') as f:
+                signature = f.read()
+
+            # Load the certificate
+            with open(certificate_path, 'rb') as f:
+                cert_data = f.read()
+            certificate = x509.load_pem_x509_certificate(cert_data)
+
+            # Load the original file
+            with open(original_file_path, 'rb') as f:
+                original_data = f.read()
+
+            # Verify the signature
+            public_key = certificate.public_key()
+            public_key.verify(
+                signature,
+                original_data,
+                padding.PKCS1v15(),
+                hashes.SHA256()
+            )
+
+            # Extract certificate details
+            subject = certificate.subject
+            cert_details = f"""
+            Imię: {subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value.split()[0]}
+            Nazwisko: {subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value.split()[1]}
+            Adres: {subject.get_attributes_for_oid(NameOID.STREET_ADDRESS)[0].value}
+            PESEL: {subject.get_attributes_for_oid(NameOID.SERIAL_NUMBER)[0].value}
+            Numer Seryjny: {certificate.serial_number}
+            Certyfikat: {certificate}
+            Od: {certificate.not_valid_after_utc}
+            Do: {certificate.not_valid_after_utc}
+            """
+
+            self.verification_result.config(state='normal')
+            self.verification_result.delete('1.0', tk.END)
+            self.verification_result.insert('1.0', "Podpis jest prawidłowy.\n" + cert_details)
+            self.verification_result.config(state='disabled')
+
+        except Exception as e:
+            self.verification_result.config(state='normal')
+            self.verification_result.delete('1.0', tk.END)
+            self.verification_result.insert('1.0', f"Błąd weryfikacji: {str(e)}")
+            self.verification_result.config(state='disabled')
 
 
 def main():
