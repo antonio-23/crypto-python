@@ -12,12 +12,18 @@ from encryptions.dh import *
 import time
 from cryptography import x509
 from cryptography.x509.oid import NameOID
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 import datetime
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from encryptions.certificates import *
 from cryptography.hazmat.backends import default_backend
+from cryptography.x509 import load_pem_x509_certificate
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
+import re
 
 
 
@@ -66,6 +72,10 @@ class EncryptionApp:
 
         # Create digital signature section
         self.create_digital_signature_section()
+
+        self.intermediate_key = intermediate_key
+        self.intermediate_cert = intermediate_cert
+        self.root_cert = root_cert
 
 
 
@@ -602,14 +612,6 @@ class EncryptionApp:
         if file_path:
             self.signed_file_path_var.set(file_path)
 
-    def generate_keys(self):
-        # Implement key generation logic here
-        messagebox.showinfo("Sukces", "Klucze zostały wygenerowane.")
-
-    def sign_document(self):
-        # Implement document signing logic here
-        messagebox.showinfo("Sukces", "Dokument został podpisany.")
-
     def verify_signature(self):
         # Implement signature verification logic here
         self.verification_result.config(state='normal')
@@ -687,7 +689,7 @@ class EncryptionApp:
             ).add_extension(
                 x509.SubjectAlternativeName([x509.DNSName(u"localhost")]),
                 critical=False,
-            ).sign(private_key, hashes.SHA256())
+            ).sign(intermediate_private_key, hashes.SHA256())
 
             # Save private key and certificate to files
             private_key_path = os.path.join(folder, "private_key.pem")
@@ -753,31 +755,85 @@ class EncryptionApp:
         except Exception as e:
             messagebox.showerror("Błąd", str(e))
 
+    def verify_certificate_chain(self, cert_chain):
+        for i in range(len(cert_chain) - 1):
+            cert = cert_chain[i]
+            issuer_cert = cert_chain[i + 1]
+
+            # Sprawdzenie, czy certyfikat jest podpisany przez swojego wystawcę
+            try:
+                issuer_public_key = issuer_cert.public_key()
+                issuer_public_key.verify(
+                    cert.signature,
+                    cert.tbs_certificate_bytes,
+                    padding.PKCS1v15(),
+                    cert.signature_hash_algorithm,
+                )
+            except Exception as e:
+                print(f"Weryfikacja certyfikatu {i} nie powiodła się: {str(e)}")
+                return False
+        return True
+
+    def load_pem_certificate(self, file_path):
+        try:
+            with open(file_path, 'rb') as pem_file:
+                pem_data = pem_file.read()
+            certificate = x509.load_pem_x509_certificate(pem_data, default_backend())
+            return certificate
+        except Exception as e:
+            print(f"Error loading PEM file: {str(e)}")
+            return None
+
+    def extract_certificate_details(self, certificate):
+        try:
+            subject = certificate.subject
+            issuer = certificate.issuer
+            serial_number = certificate.serial_number
+            valid_from = certificate.not_valid_before
+            valid_to = certificate.not_valid_after
+
+            details = f"""
+            Podmiot: {subject}
+            Emitent: {issuer}
+            Numer Seryjny: {serial_number}
+            Ważny od: {valid_from}
+            Ważny do: {valid_to}
+            """
+            return details
+        except Exception as e:
+            return f"Nie udało się wyciągnąć szczegółów certyfikatu: {str(e)}"
+
     def verify_signature(self):
         try:
-            # Retrieve the paths from the input fields
+            # Pobierz ścieżki plików z pól wejściowych
             signed_file_path = self.signed_file_path_var.get()
             certificate_path = self.certificate_path_var.get()
             certificate_chain_path = self.certificate_chain_path_var.get()
             original_file_path = self.file_path_var.get()
 
-            if not all([signed_file_path, certificate_path, original_file_path]):
-                raise ValueError("Proszę wybrać podpisany plik, certyfikat oraz oryginalny plik.")
+            if not all([signed_file_path, certificate_path, certificate_chain_path, original_file_path]):
+                raise ValueError("Proszę wybrać podpisany plik, certyfikat, łańcuch certyfikatów oraz oryginalny plik.")
 
-            # Load the signed file
+            # Załaduj podpisany plik
             with open(signed_file_path, 'rb') as f:
                 signature = f.read()
 
-            # Load the certificate
+            # Załaduj certyfikat
             with open(certificate_path, 'rb') as f:
                 cert_data = f.read()
-            certificate = x509.load_pem_x509_certificate(cert_data)
+            certificate = x509.load_pem_x509_certificate(cert_data, default_backend())
 
-            # Load the original file
+            # Załaduj łańcuch certyfikatów
+            with open(certificate_chain_path, 'rb') as f:
+                chain_data = f.read()
+            cert_chain = re.findall(b'-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----', chain_data, re.DOTALL)
+            cert_chain = [x509.load_pem_x509_certificate(cert, default_backend()) for cert in cert_chain]
+
+            # Załaduj oryginalny plik
             with open(original_file_path, 'rb') as f:
                 original_data = f.read()
 
-            # Verify the signature
+            # Weryfikacja podpisu
             public_key = certificate.public_key()
             public_key.verify(
                 signature,
@@ -786,30 +842,55 @@ class EncryptionApp:
                 hashes.SHA256()
             )
 
-            # Extract certificate details
-            subject = certificate.subject
-            cert_details = f"""
-            Imię: {subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value.split()[0]}
-            Nazwisko: {subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value.split()[1]}
-            Adres: {subject.get_attributes_for_oid(NameOID.STREET_ADDRESS)[0].value}
-            PESEL: {subject.get_attributes_for_oid(NameOID.SERIAL_NUMBER)[0].value}
-            Numer Seryjny: {certificate.serial_number}
-            Certyfikat: {certificate}
-            Od: {certificate.not_valid_after_utc}
-            Do: {certificate.not_valid_after_utc}
-            """
+            # Weryfikacja łańcucha certyfikatów
+            for i in range(len(cert_chain) - 1):
+                cert = cert_chain[i]
+                issuer_cert = cert_chain[i + 1]
 
+                # Sprawdź, czy certyfikat jest samopodpisany (ostatni w łańcuchu)
+                if cert.subject == cert.issuer:
+                    continue  # Samopodpisany certyfikat jest poprawny jako ostatni w łańcuchu
+
+                # Weryfikacja emitenta i podmiotu
+                if cert.issuer != issuer_cert.subject:
+                    raise ValueError(
+                        f"Emitent certyfikatu {cert.subject.rfc4514_string()} ({cert.issuer.rfc4514_string()}) "
+                        f"nie zgadza się z podmiotem kolejnego certyfikatu ({issuer_cert.subject.rfc4514_string()})."
+                    )
+
+                # Weryfikacja podpisu certyfikatu
+                issuer_cert.public_key().verify(
+                    cert.signature,
+                    cert.tbs_certificate_bytes,
+                    padding.PKCS1v15(),
+                    cert.signature_hash_algorithm,
+                )
+
+            # Wyciągnij szczegóły certyfikatów w łańcuchu
+            all_cert_details = [
+                f"Certyfikat {idx + 1}:\n" + self.extract_certificate_details(cert)
+                for idx, cert in enumerate(cert_chain)
+            ]
+            cert_chain_details = "\n\n".join(all_cert_details)
+
+            # Wyświetl wynik weryfikacji
             self.verification_result.config(state='normal')
             self.verification_result.delete('1.0', tk.END)
-            self.verification_result.insert('1.0', "Podpis jest prawidłowy.\n" + cert_details)
+            self.verification_result.insert('1.0', "Podpis jest prawidłowy.\n\n" + cert_chain_details)
             self.verification_result.config(state='disabled')
 
+            for idx, cert in enumerate(cert_chain):
+                print(f"Certyfikat {idx + 1}:")
+                print(f"  Podmiot: {cert.subject.rfc4514_string()}")
+                print(f"  Emitent: {cert.issuer.rfc4514_string()}")
+
+
         except Exception as e:
+            # Obsługa błędów
             self.verification_result.config(state='normal')
             self.verification_result.delete('1.0', tk.END)
             self.verification_result.insert('1.0', f"Błąd weryfikacji: {str(e)}")
             self.verification_result.config(state='disabled')
-
 
 def main():
     root = tk.Tk()
