@@ -24,6 +24,9 @@ from cryptography.x509 import load_pem_x509_certificate
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 import re
+import hmac
+import hashlib
+
 
 
 
@@ -524,6 +527,21 @@ class EncryptionApp:
                                                                                                       columnspan=3,
                                                                                                       pady=10)
 
+        # HMAC Section
+        hmac_frame = ttk.LabelFrame(self.digital_signature_frame, text="HMAC", padding="10")
+        hmac_frame.pack(expand=1, fill='both', padx=10, pady=10)
+
+        ttk.Label(hmac_frame, text="Klucz HMAC:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
+        self.hmac_key_var = tk.StringVar()
+        self.hmac_key_entry = ttk.Entry(hmac_frame, textvariable=self.hmac_key_var, width=50)
+        self.hmac_key_entry.grid(row=0, column=1, padx=5, pady=5)
+        ttk.Button(hmac_frame, text="Przeglądaj", command=self.load_hmac_key).grid(row=0, column=2, padx=5, pady=5)
+
+        ttk.Button(hmac_frame, text="Szyfruj HMAC", command=self.encrypt_hmac).grid(row=1, column=0, columnspan=3,
+                                                                                    pady=10)
+        ttk.Button(hmac_frame, text="Weryfikuj HMAC", command=self.verify_hmac).grid(row=2, column=0, columnspan=3,
+                                                                                     pady=10)
+
         # Document Signing Section
         signing_frame = ttk.LabelFrame(self.digital_signature_frame, text="Podpisywanie", padding="10")
         signing_frame.pack(expand=1, fill='both', padx=10, pady=10)
@@ -586,6 +604,66 @@ class EncryptionApp:
         ttk.Label(verification_frame, text="Wynik:").grid(row=5, column=0, padx=5, pady=5, sticky=tk.W)
         self.verification_result = tk.Text(verification_frame, height=15, width=70, wrap="none", state='disabled')
         self.verification_result.grid(row=5, column=1, padx=5, pady=5)
+
+    def load_hmac_key(self):
+        file_path = filedialog.askopenfilename(filetypes=[("All files", "*.*")])
+        if file_path:
+            with open(file_path, 'r') as file:
+                hmac_key = file.read().strip()
+            self.hmac_key_var.set(hmac_key)
+
+    def encrypt_hmac(self):
+        try:
+            document_path = self.document_path_var.get()
+            hmac_key = self.hmac_key_var.get()
+
+            if not document_path or not hmac_key:
+                raise ValueError("Proszę wybrać dokument i wprowadzić klucz HMAC.")
+
+            with open(document_path, 'rb') as f:
+                document_data = f.read()
+
+            hmac_signature = hmac.new(hmac_key.encode(), document_data, hashlib.sha256).hexdigest()
+
+            signature_path = os.path.join(os.path.dirname(document_path), "hmac_signature.sig")
+            with open(signature_path, 'w') as f:
+                f.write(hmac_signature)
+
+            messagebox.showinfo("Sukces", f"Dokument został zaszyfrowany HMAC. Podpis zapisany w: {signature_path}")
+
+        except Exception as e:
+            messagebox.showerror("Błąd", str(e))
+
+    def verify_hmac(self):
+        try:
+            document_path = self.document_path_var.get()
+            hmac_key = self.hmac_key_var.get()
+            signed_file_path = self.signed_file_path_var.get()
+
+            if not document_path or not hmac_key or not signed_file_path:
+                raise ValueError("Proszę wybrać dokument, klucz HMAC i podpisany plik.")
+
+            with open(document_path, 'rb') as f:
+                document_data = f.read()
+
+            with open(signed_file_path, 'r') as f:
+                hmac_signature = f.read().strip()
+
+            expected_hmac_signature = hmac.new(hmac_key.encode(), document_data, hashlib.sha256).hexdigest()
+
+            if hmac.compare_digest(hmac_signature, expected_hmac_signature):
+                self.verification_result.config(state='normal')
+                self.verification_result.delete('1.0', tk.END)
+                self.verification_result.insert('1.0', "Podpis HMAC jest prawidłowy.")
+                self.verification_result.config(state='disabled')
+            else:
+                raise ValueError("Podpis HMAC jest nieprawidłowy.")
+
+        except Exception as e:
+            self.verification_result.config(state='normal')
+            self.verification_result.delete('1.0', tk.END)
+            self.verification_result.insert('1.0', f"Błąd weryfikacji: {str(e)}")
+            self.verification_result.config(state='disabled')
 
     def load_certificate(self):
         file_path = filedialog.askopenfilename(filetypes=[("PEM files", "*.pem"), ("All files", "*.*")])
@@ -718,6 +796,8 @@ class EncryptionApp:
 
         except Exception as e:
             messagebox.showerror("Błąd", str(e))
+
+
 
     def sign_document(self):
         try:
